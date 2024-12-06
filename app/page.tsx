@@ -9,10 +9,10 @@ export default async function Index() {
         <h1 className="font-medium text-3xl mb-4">Jam app - Admin</h1>
         <div className="flex justify-around">
           <Button asChild size={"lg"} variant={"outline"}>
-            <Link href="/protected/add">Edit</Link>
+            <Link href="/protected/bar/add">Add new</Link>
           </Button>
           <Button asChild size={"lg"} variant={"outline"}>
-            <Link href="/protected/view">Se alle</Link>
+            <Link href="/protected/view">See all</Link>
           </Button>
         </div>
       </main>
