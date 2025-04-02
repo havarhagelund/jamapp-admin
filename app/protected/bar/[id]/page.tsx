@@ -1,7 +1,7 @@
 'use client'
 
 import { useParams } from 'next/navigation'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { Database } from '@/types/database.types'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -12,6 +12,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { createClient } from "@/utils/supabase/client"
 import { useToast } from "@/hooks/use-toast"
 import { Checkbox } from '@/components/ui/checkbox'
+import { GoogleMap, LoadScript, Autocomplete } from '@react-google-maps/api'
 
 
 type Restaurant = Database['public']['Tables']['resturents']['Row']
@@ -39,13 +40,15 @@ export default function RestaurantPage() {
     const supabase = createClient()
     const [restaurant, setRestaurant] = useState<Restaurant | null>(null)
     const [isEditing, setIsEditing] = useState(false)
-    const [editedData, setEditedData] = useState<EditedData>({ lat: '', long: '' })
+    const [editedData, setEditedData] = useState<EditedData>({})
     const { toast } = useToast()
     const [availableActivities, setAvailableActivities] = useState<string[]>([])
     const [availableServings, setAvailableServings] = useState<string[]>([])
     const [selectedActivities, setSelectedActivities] = useState<string[]>([])
     const [selectedServings, setSelectedServings] = useState<string[]>([])
-    const [editedOpeningHours, setEditedOpeningHours] = useState<OpeningHours>({});
+    const [editedOpeningHours, setEditedOpeningHours] = useState<OpeningHours>({})
+    const autocompleteRef = useRef<google.maps.places.Autocomplete | null>(null)
+    const [location, setLocation] = useState<{ lat: number; lng: number } | null>(null)
 
 
     useEffect(() => {
@@ -94,13 +97,31 @@ export default function RestaurantPage() {
 
     console.log(editedData.long, editedData.lat)
 
+    const handlePlaceSelect = (place: google.maps.places.PlaceResult) => {
+        if (place.geometry && place.geometry.location) {
+            const lat = place.geometry.location.lat()
+            const lng = place.geometry.location.lng()
+            setLocation({ lat, lng })
+            setEditedData(prev => ({ ...prev, address: place.formatted_address || '' }))
+        }
+    }
+
     const handleSave = async () => {
+        if (!location) {
+            toast({
+                variant: "destructive",
+                title: "Error",
+                description: "Please select a location"
+            })
+            return
+        }
+
         const updatedData = {
             ...editedData,
             activities: selectedActivities,
             servings: selectedServings,
             opening_hours: editedOpeningHours,
-
+            location: `POINT(${location.lng} ${location.lat})`,
         };
 
         const { error } = await supabase
@@ -207,11 +228,27 @@ export default function RestaurantPage() {
 
                             <div>
                                 <Label htmlFor="address">Address</Label>
-                                <Input
-                                    id="address"
-                                    value={editedData.address || ''}
-                                    onChange={e => setEditedData(prev => ({ ...prev, address: e.target.value }))}
-                                />
+                                <LoadScript 
+                                    googleMapsApiKey={process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || ''}
+                                    libraries={["places"]}
+                                >
+                                    <Autocomplete
+                                        onLoad={autocomplete => autocompleteRef.current = autocomplete}
+                                        onPlaceChanged={() => {
+                                            if (autocompleteRef.current) {
+                                                const place = autocompleteRef.current.getPlace()
+                                                handlePlaceSelect(place)
+                                            }
+                                        }}
+                                    >
+                                        <Input
+                                            id="address"
+                                            value={editedData.address || ''}
+                                            onChange={e => setEditedData(prev => ({ ...prev, address: e.target.value }))}
+                                            placeholder="Search for an address"
+                                        />
+                                    </Autocomplete>
+                                </LoadScript>
                             </div>
 
                             <div>
@@ -294,26 +331,6 @@ export default function RestaurantPage() {
                                         />
                                     </div>
                                 ))}
-                            </div>
-
-                            <div>
-                                <Label htmlFor="lat">Latitude</Label>
-                                <Input
-                                    id="lat"
-                                    type="number"
-                                    value={editedData.lat || ''}
-                                    onChange={e => setEditedData(prev => ({ ...prev, lat: e.target.value }))}
-                                />
-                            </div>
-
-                            <div>
-                                <Label htmlFor="long">Longitude</Label>
-                                <Input
-                                    id="long"
-                                    type="number"
-                                    value={editedData.long || ''}
-                                    onChange={e => setEditedData(prev => ({ ...prev, long: e.target.value }))}
-                                />
                             </div>
 
                             <Button onClick={handleSave}>Save Changes</Button>
