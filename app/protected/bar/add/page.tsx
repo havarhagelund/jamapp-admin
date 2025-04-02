@@ -191,7 +191,10 @@ export default function AddRestaurantPage() {
 
                         <div>
                             <Label htmlFor="address">Address</Label>
-                            <LoadScript googleMapsApiKey={process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || ''}>
+                            <LoadScript 
+                                googleMapsApiKey={process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || ''}
+                                libraries={["places"]}
+                            >
                                 <Autocomplete
                                     onLoad={autocomplete => autocompleteRef.current = autocomplete}
                                     onPlaceChanged={() => {
