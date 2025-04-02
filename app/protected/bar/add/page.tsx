@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { Database } from '@/types/database.types'
 import { Button } from '@/components/ui/button'
@@ -11,6 +11,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { createClient } from "@/utils/supabase/client"
 import { useToast } from "@/hooks/use-toast"
 import { Checkbox } from '@/components/ui/checkbox'
+import { GoogleMap, LoadScript, Autocomplete } from '@react-google-maps/api'
 
 type Restaurant = Database['public']['Tables']['resturents']['Row']
 type OpeningHours = {
@@ -24,6 +25,7 @@ export default function AddRestaurantPage() {
     const router = useRouter()
     const supabase = createClient()
     const { toast } = useToast()
+    const autocompleteRef = useRef<google.maps.places.Autocomplete | null>(null)
 
     const [restaurantData, setRestaurantData] = useState<Partial<Restaurant>>({
         name: '',
@@ -37,8 +39,7 @@ export default function AddRestaurantPage() {
         activities: [],
         servings: [],
     })
-    const [lat, setLat] = useState<string>('')
-    const [long, setLong] = useState<string>('')
+    const [location, setLocation] = useState<{ lat: number; lng: number } | null>(null)
 
     const [availableActivities, setAvailableActivities] = useState<string[]>([])
     const [availableServings, setAvailableServings] = useState<string[]>([])
@@ -66,13 +67,31 @@ export default function AddRestaurantPage() {
         fetchOptions()
     }, [supabase])
 
+    const handlePlaceSelect = (place: google.maps.places.PlaceResult) => {
+        if (place.geometry && place.geometry.location) {
+            const lat = place.geometry.location.lat()
+            const lng = place.geometry.location.lng()
+            setLocation({ lat, lng })
+            setRestaurantData(prev => ({ ...prev, address: place.formatted_address || '' }))
+        }
+    }
+
     const handleSubmit = async () => {
+        if (!location) {
+            toast({
+                variant: "destructive",
+                title: "Error",
+                description: "Please select a location"
+            })
+            return
+        }
+
         const dataToSubmit = {
             ...restaurantData,
             activities: selectedActivities,
             servings: selectedServings,
             opening_hours: openingHours,
-            location: `POINT(${long} ${lat})`,
+            location: `POINT(${location.lng} ${location.lat})`,
         }
 
         console.log("dataToSubmit", dataToSubmit)
@@ -172,11 +191,24 @@ export default function AddRestaurantPage() {
 
                         <div>
                             <Label htmlFor="address">Address</Label>
-                            <Input
-                                id="address"
-                                value={restaurantData.address || ''}
-                                onChange={e => setRestaurantData(prev => ({ ...prev, address: e.target.value }))}
-                            />
+                            <LoadScript googleMapsApiKey={process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || ''}>
+                                <Autocomplete
+                                    onLoad={autocomplete => autocompleteRef.current = autocomplete}
+                                    onPlaceChanged={() => {
+                                        if (autocompleteRef.current) {
+                                            const place = autocompleteRef.current.getPlace()
+                                            handlePlaceSelect(place)
+                                        }
+                                    }}
+                                >
+                                    <Input
+                                        id="address"
+                                        value={restaurantData.address || ''}
+                                        onChange={e => setRestaurantData(prev => ({ ...prev, address: e.target.value }))}
+                                        placeholder="Search for an address"
+                                    />
+                                </Autocomplete>
+                            </LoadScript>
                         </div>
 
                         <div>
@@ -259,26 +291,6 @@ export default function AddRestaurantPage() {
                                     />
                                 </div>
                             ))}
-                        </div>
-
-                        <div>
-                            <Label htmlFor="lat">Latitude</Label>
-                            <Input
-                                id="lat"
-                                type="number"
-                                value={lat || ''}
-                                onChange={e => setLat(e.target.value)}
-                            />
-                        </div>
-
-                        <div>
-                            <Label htmlFor="long">Longitude</Label>
-                            <Input
-                                id="long"
-                                type="number"
-                                value={long || ''}
-                                onChange={e => setLong(e.target.value)}
-                            />
                         </div>
 
                         <Button onClick={handleSubmit}>Create Restaurant</Button>
